@@ -52,3 +52,5 @@ export const getSetsBySession = (id) =>
 
 export const getUnsyncedSets = () =>
   run("sets", "readonly", (s) => s.getAll()).then((all) => all.filter((x) => !x.synced));
+
+export const getSession = (id) => run("sessions", "readonly", (s) => s.get(id));
