@@ -37,9 +37,12 @@ export const getLastSession = async () => {
   return all.at(-1) ?? null;
 };
 
-export const addSet = ({ sessionId, exercise, setNumber, reps, weightKg }) =>
-  run("sets", "readwrite", (s) =>
-    s.add({ sessionId, exercise, setNumber, reps, weightKg, loggedAt: Date.now(), synced: 0 }));
+// Returns the full saved record (with id and loggedAt) so the UI and DB never disagree.
+export const addSet = async (f) => {
+  const rec = { ...f, loggedAt: Date.now(), synced: 0 };
+  rec.id = await run("sets", "readwrite", (s) => s.add(rec));
+  return rec;
+};
 
 // Editing is allowed during a workout (Module 2 will enforce that in the UI).
 export const updateSet = (set) => run("sets", "readwrite", (s) => s.put({ ...set, synced: 0 }));
@@ -56,3 +59,11 @@ export const getUnsyncedSets = () =>
 export const getSession = (id) => run("sessions", "readonly", (s) => s.get(id));
 
 export const getAllSessions = () => run("sessions", "readonly", (s) => s.getAll());
+
+// Mark as uploaded without resetting the flag (updateSet always sets synced to 0).
+export async function markSynced(ids) {
+  for (const id of ids) {
+    const s = await run("sets", "readonly", (st) => st.get(id));
+    if (s) await run("sets", "readwrite", (st) => st.put({ ...s, synced: 1 }));
+  }
+}

@@ -42,3 +42,5 @@ select{width:100%;padding:12px;border-radius:8px;background:var(--bg);border:1px
 .keys button{height:60px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-size:1.5rem}
 .keys button:active{background:var(--line)}
 .done{width:100%;margin-top:8px;height:56px;border-radius:10px;background:var(--accent);color:#000;font-weight:700}
+input{width:100%;padding:12px;margin:4px 0 12px;border-radius:8px;background:var(--bg);border:1px solid var(--line);color:var(--text);font:inherit}
+.log.wide{width:100%}

@@ -4,6 +4,7 @@ import { nextCycleIndex, workoutMinutes } from "./logic.js";
 import * as db from "./db.js";
 import { openPad } from "./numpad.js";
 import { renderProgress } from "./progress.js";
+import { syncNow, renderSettings } from "./sync.js";
 
 const app = document.getElementById("app");
 // S = everything the screen needs. prev = last time's values (used to pre-fill).
@@ -59,6 +60,7 @@ function card(i) {
 
 function render() {
   if (S.tab === "progress") return renderProgress(app);
+  if (S.tab === "settings") return renderSettings(app);
   const r = routine(), total = r.reduce((t, x) => t + x.sets, 0);
   const list = S.all ? r.map((_, i) => i) : r[S.focus] ? [S.focus] : [];
   app.innerHTML = `<header><div><h1>${cap(S.type)}</h1>
@@ -75,7 +77,7 @@ function edit(i, n, f) {
     title: `${x.name}, set ${n}`, value: v[f], isWeight: f === "weightKg",
     onDone: async (num) => {
       const l = logged(x.name, n);
-      if (l) { l[f] = num; await db.updateSet(l); } // logged sets stay editable while the workout is active
+      if (l) { l[f] = num; await db.updateSet(l); syncNow(); } // logged sets stay editable while the workout is active
       else S.drafts[key(x.name, n)] = { ...v, [f]: num };
       render();
       if (!l && f === "weightKg") edit(i, n, "reps"); // flow straight from weight to reps
@@ -93,8 +95,8 @@ async function log(i, n) {
     S.session = { id }; localStorage.setItem("activeSession", id);
   }
   const rec = { sessionId: S.session.id, exercise: x.name, setNumber: n, reps: +v.reps, weightKg: +v.weightKg };
-  const id = await db.addSet(rec);
-  S.sets.push({ ...rec, id, loggedAt: Date.now(), synced: 0 });
+  S.sets.push(await db.addSet(rec));
+  syncNow();
   delete S.drafts[key(x.name, n)];
   if (!S.all && !nextOpen(i)) S.focus = firstOpen(); // exercise finished: load the next one
   render();
@@ -117,5 +119,5 @@ document.getElementById("nav").addEventListener("click", (e) => {
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("on", b === t));
   render();
 });
-
-init();
+window.addEventListener("online", () => syncNow());
+init().then(syncNow);
