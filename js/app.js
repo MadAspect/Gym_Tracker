@@ -121,3 +121,7 @@ document.getElementById("nav").addEventListener("click", (e) => {
 });
 window.addEventListener("online", () => syncNow());
 init().then(syncNow);
+
+// PWA: work offline, and ask the browser not to evict our saved workouts.
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+navigator.storage?.persist?.();
