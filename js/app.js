@@ -3,10 +3,11 @@ import { DEFAULT_ROUTINE, CYCLE } from "./routine.js";
 import { nextCycleIndex, workoutMinutes } from "./logic.js";
 import * as db from "./db.js";
 import { openPad } from "./numpad.js";
+import { renderProgress } from "./progress.js";
 
 const app = document.getElementById("app");
 // S = everything the screen needs. prev = last time's values (used to pre-fill).
-const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false };
+const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false, tab: "log" };
 const routine = () => DEFAULT_ROUTINE[S.type];
 const key = (e, n) => `${e}|${n}`;
 const logged = (e, n) => S.sets.find((s) => s.exercise === e && s.setNumber === n);
@@ -38,20 +39,26 @@ async function init() {
   render();
 }
 
+const nextOpen = (i) => { const x = routine()[i]; for (let n = 1; n <= x.sets; n++) if (!logged(x.name, n)) return n; return 0; };
+
+function row(i, n) {
+  const x = routine()[i], v = val(x.name, n), l = logged(x.name, n);
+  const chip = (f, txt) => `<button class="chip" data-a="edit" data-i="${i}" data-n="${n}" data-f="${f}">${txt}</button>`;
+  return `<div class="set ${l ? "done" : ""}"><span class="n">${n}</span>
+    ${chip("weightKg", v.weightKg === "" ? "kg" : v.weightKg + " kg")}${chip("reps", v.reps === "" ? "reps" : v.reps + " reps")}
+    <button class="log" data-a="log" data-i="${i}" data-n="${n}">${l ? "✓" : "Log"}</button></div>`;
+}
+
+// Focus view shows ONLY the current set; "All exercises" shows every set of every exercise.
 function card(i) {
   const x = routine()[i];
-  const rows = Array.from({ length: x.sets }, (_, k) => {
-    const n = k + 1, v = val(x.name, n), l = logged(x.name, n);
-    const chip = (f, txt) => `<button class="chip" data-a="edit" data-i="${i}" data-n="${n}" data-f="${f}">${txt}</button>`;
-    return `<div class="set ${l ? "done" : ""}"><span class="n">${n}</span>
-      ${chip("weightKg", v.weightKg === "" ? "kg" : v.weightKg + " kg")}
-      ${chip("reps", v.reps === "" ? "reps" : v.reps + " reps")}
-      <button class="log" data-a="log" data-i="${i}" data-n="${n}">${l ? "✓" : "Log"}</button></div>`;
-  }).join("");
-  return `<section class="glass card ${i === S.focus ? "cur" : ""}"><h2 data-a="focus" data-i="${i}">${x.name}</h2>${rows}</section>`;
+  const n = nextOpen(i) || x.sets;
+  const rows = S.all ? Array.from({ length: x.sets }, (_, k) => row(i, k + 1)).join("") : `<p class="mute">Set ${n} of ${x.sets}</p>${row(i, n)}`;
+  return `<section class="card ${i === S.focus ? "cur" : ""}"><h2 data-a="focus" data-i="${i}">${x.name}</h2>${rows}</section>`;
 }
 
 function render() {
+  if (S.tab === "progress") return renderProgress(app);
   const r = routine(), total = r.reduce((t, x) => t + x.sets, 0);
   const list = S.all ? r.map((_, i) => i) : r[S.focus] ? [S.focus] : [];
   app.innerHTML = `<header><div><h1>${cap(S.type)}</h1>
@@ -89,7 +96,7 @@ async function log(i, n) {
   const id = await db.addSet(rec);
   S.sets.push({ ...rec, id, loggedAt: Date.now(), synced: 0 });
   delete S.drafts[key(x.name, n)];
-  if (!S.all) S.focus = firstOpen();
+  if (!S.all && !nextOpen(i)) S.focus = firstOpen(); // exercise finished: load the next one
   render();
 }
 
@@ -102,6 +109,13 @@ app.addEventListener("click", (e) => {
   else if (a === "edit") edit(+i, +n, f);
   else if (a === "log") log(+i, +n);
   else if (a === "finish") { localStorage.removeItem("activeSession"); location.reload(); }
+});
+document.getElementById("nav").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-tab]");
+  if (!t) return;
+  S.tab = t.dataset.tab;
+  document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("on", b === t));
+  render();
 });
 
 init();
