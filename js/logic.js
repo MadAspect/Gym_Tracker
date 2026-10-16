@@ -26,13 +26,35 @@ export const totalVolume = (sets) => round(sets.reduce((t, s) => t + setVolume(s
 // Epley estimated 1-rep max: a fair way to compare sets with different reps.
 export const estimated1RM = (s) => round(s.weightKg * (1 + s.reps / 30));
 
-// Personal bests per exercise: heaviest weight and best estimated 1RM.
+// Personal bests per exercise, with the date each was set.
 export function personalBests(sets) {
   const pb = {};
   for (const s of sets) {
-    const p = (pb[s.exercise] ??= { maxWeightKg: 0, best1RM: 0 });
-    p.maxWeightKg = Math.max(p.maxWeightKg, s.weightKg);
-    p.best1RM = Math.max(p.best1RM, estimated1RM(s));
+    const p = (pb[s.exercise] ??= { maxWeightKg: 0, maxWeightAt: 0, best1RM: 0, best1RMAt: 0 });
+    if (s.weightKg > p.maxWeightKg) { p.maxWeightKg = s.weightKg; p.maxWeightAt = s.loggedAt; }
+    const e = estimated1RM(s);
+    if (e > p.best1RM) { p.best1RM = e; p.best1RMAt = s.loggedAt; }
   }
   return pb;
+}
+
+// Rep PRs: the most reps ever done at each weight for one exercise, heaviest first.
+export function repPRs(sets, exercise) {
+  const m = {};
+  for (const s of sets)
+    if (s.exercise === exercise && (!m[s.weightKg] || s.reps > m[s.weightKg].reps))
+      m[s.weightKg] = { weightKg: s.weightKg, reps: s.reps, at: s.loggedAt };
+  return Object.values(m).sort((a, b) => b.weightKg - a.weightKg);
+}
+
+// Does a freshly logged set beat everything logged earlier for that exercise? Returns PR labels.
+export function newPRs(history, set) {
+  const prior = history.filter((h) => h.exercise === set.exercise && h.loggedAt < set.loggedAt);
+  if (!prior.length) return []; // the very first time doing an exercise is not a "PR"
+  const out = [];
+  if (set.weightKg > Math.max(...prior.map((h) => h.weightKg))) out.push("heaviest weight");
+  const same = prior.filter((h) => h.weightKg === set.weightKg);
+  if (same.length && set.reps > Math.max(...same.map((h) => h.reps))) out.push(`most reps at ${set.weightKg} kg`);
+  if (estimated1RM(set) > Math.max(...prior.map(estimated1RM))) out.push("estimated 1RM");
+  return out;
 }

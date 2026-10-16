@@ -1,7 +1,6 @@
 // UI: progress tab. Charts are plain SVG, so there's no library and it works offline.
 import * as db from "./db.js";
-import { DEFAULT_ROUTINE } from "./routine.js";
-import { totalVolume, workoutMinutes, estimated1RM, personalBests } from "./logic.js";
+import { totalVolume, workoutMinutes, estimated1RM, personalBests, repPRs } from "./logic.js";
 
 const DAY = 864e5;
 let ex = ""; // exercise picked in the dropdown
@@ -18,8 +17,7 @@ function chart(pts) {
 }
 
 export async function renderProgress(el) {
-  const [sets, sessions] = await Promise.all([db.getSetsSince(0), db.getAllSessions()]);
-  const names = [...new Set(Object.values(DEFAULT_ROUTINE).flat().map((x) => x.name))];
+  const [sets, sessions, names] = await Promise.all([db.getSetsSince(0), db.getAllSessions(), db.getLibrary()]);
   ex ||= names[0];
   const by = {};
   for (const s of sets) (by[s.sessionId] ??= []).push(s);
@@ -37,7 +35,8 @@ export async function renderProgress(el) {
     <h3>Last 30 days</h3><div class="card list">${month.map((s) => `<div><span>${date(s.startedAt)}, ${s.type}</span>
       <span>${workoutMinutes(by[s.id])} min</span><span>${Math.round(totalVolume(by[s.id]))} kg</span></div>`).join("") || `<span class="mute">No workouts yet.</span>`}</div>
     <h3>Estimated 1RM (kg)</h3><div class="card"><select>${names.map((n) => `<option ${n === ex ? "selected" : ""}>${n}</option>`).join("")}</select>${chart(exPts)}</div>
+    <h3>Rep records: ${ex}</h3><div class="card list">${repPRs(sets, ex).slice(0, 6).map((r) => `<div><span>${r.weightKg} kg</span><span>${r.reps} reps</span><span>${date(r.at)}</span></div>`).join("") || `<span class="mute">No sets yet.</span>`}</div>
     <h3>Total volume per workout (kg)</h3><div class="card">${chart(volPts)}</div>
-    <h3>Personal records</h3><div class="card list">${names.filter((n) => pb[n]).map((n) => `<div><span>${n}</span><span>${pb[n].maxWeightKg} kg</span><span>1RM ${pb[n].best1RM}</span></div>`).join("") || `<span class="mute">Log a workout first.</span>`}</div>`;
+    <h3>Personal records</h3><div class="card list">${names.filter((n) => pb[n]).map((n) => `<div><span>${n}</span><span>${pb[n].maxWeightKg} kg, ${date(pb[n].maxWeightAt)}</span><span>1RM ${pb[n].best1RM}</span></div>`).join("") || `<span class="mute">Log a workout first.</span>`}</div>`;
   el.querySelector("select").onchange = (e) => { ex = e.target.value; renderProgress(el); };
 }

@@ -1,15 +1,16 @@
 // UI controller: holds screen state, renders HTML, reacts to taps.
-import { DEFAULT_ROUTINE, CYCLE } from "./routine.js";
-import { nextCycleIndex, workoutMinutes } from "./logic.js";
+import { CYCLE } from "./routine.js";
+import { nextCycleIndex, workoutMinutes, newPRs } from "./logic.js";
 import * as db from "./db.js";
 import { openPad } from "./numpad.js";
 import { renderProgress } from "./progress.js";
-import { syncNow, renderSettings } from "./sync.js";
+import { syncNow } from "./sync.js";
+import { renderSettings } from "./settings.js";
 
 const app = document.getElementById("app");
 // S = everything the screen needs. prev = last time's values (used to pre-fill).
-const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false, tab: "log" };
-const routine = () => DEFAULT_ROUTINE[S.type];
+const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false, tab: "log", routines: {}, toast: "" };
+const routine = () => S.routines[S.type] ?? [];
 const key = (e, n) => `${e}|${n}`;
 const logged = (e, n) => S.sets.find((s) => s.exercise === e && s.setNumber === n);
 const cap = (t) => t[0].toUpperCase() + t.slice(1);
@@ -26,6 +27,7 @@ function firstOpen() {
 }
 
 async function init() {
+  Object.assign(S, { session: null, sets: [], prev: {}, drafts: {}, toast: "", routines: await db.getRoutine() });
   const sid = Number(localStorage.getItem("activeSession"));
   const active = sid ? await db.getSession(sid) : null;
   if (active) {
@@ -67,6 +69,7 @@ function render() {
     <p>${S.sets.length} of ${total} sets${S.sets.length > 1 ? `, ${workoutMinutes(S.sets)} min` : ""}</p></div>
     <button data-a="all">${S.all ? "Focus view" : "All exercises"}</button></header>
     <div class="bar"><i style="width:${(S.sets.length / total) * 100}%"></i></div>
+    ${S.toast ? `<div class="toast">${S.toast}</div>` : ""}
     ${list.map(card).join("") || `<div class="glass empty">All sets logged.</div>`}
     ${S.session ? `<button class="finish" data-a="finish">Finish workout</button>` : ""}`;
 }
@@ -95,7 +98,10 @@ async function log(i, n) {
     S.session = { id }; localStorage.setItem("activeSession", id);
   }
   const rec = { sessionId: S.session.id, exercise: x.name, setNumber: n, reps: +v.reps, weightKg: +v.weightKg };
-  S.sets.push(await db.addSet(rec));
+  const saved = await db.addSet(rec);
+  S.sets.push(saved);
+  const prs = newPRs(await db.getSetsSince(0), saved);
+  S.toast = prs.length ? `New PR: ${prs.join(", ")}` : "";
   syncNow();
   delete S.drafts[key(x.name, n)];
   if (!S.all && !nextOpen(i)) S.focus = firstOpen(); // exercise finished: load the next one
@@ -117,7 +123,7 @@ document.getElementById("nav").addEventListener("click", (e) => {
   if (!t) return;
   S.tab = t.dataset.tab;
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("on", b === t));
-  render();
+  if (S.tab === "log") init(); else render(); // re-read routine and sessions after settings changes
 });
 window.addEventListener("online", () => syncNow());
 init().then(syncNow);

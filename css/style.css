@@ -44,3 +44,18 @@ select{width:100%;padding:12px;border-radius:8px;background:var(--bg);border:1px
 .done{width:100%;margin-top:8px;height:56px;border-radius:10px;background:var(--accent);color:#000;font-weight:700}
 input{width:100%;padding:12px;margin:4px 0 12px;border-radius:8px;background:var(--bg);border:1px solid var(--line);color:var(--text);font:inherit}
 .log.wide{width:100%}
+.toast{background:var(--accent);color:#000;padding:9px 12px;border-radius:8px;margin-bottom:10px;font-weight:600}
+.ex{padding:10px 0;border-bottom:1px solid var(--line)}
+.ex .ctl{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.step{display:inline-flex;align-items:center;gap:6px}
+.step button,.mini{min-width:40px;height:36px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg)}
+.step b{min-width:22px;text-align:center}
+.add{display:flex;gap:8px;margin-top:12px}
+.add select,.add input{margin:0;flex:1}
+.mini{background:var(--accent);color:#000;font-weight:700;border:0}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags span{padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:.9rem}
+.del{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.hold{position:relative;overflow:hidden;padding:9px 12px;border-radius:8px;border:1px solid #d9534f;color:#ff8a80;touch-action:none;user-select:none;-webkit-user-select:none;white-space:nowrap}
+.hold::after{content:"";position:absolute;inset:0;background:rgba(217,83,79,.35);transform:scaleX(0);transform-origin:left}
+.hold.on::after{transform:scaleX(1);transition:transform 1.5s linear}
