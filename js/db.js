@@ -104,3 +104,9 @@ export async function deleteSession(id) {
   for (const x of sets) await run("sets", "readwrite", (st) => st.delete(x.id));
   await run("sessions", "readwrite", (st) => st.delete(id));
 }
+
+// Stamp the end time when a workout is ended.
+export async function endSession(id) {
+  const s = await getSession(id);
+  if (s) await run("sessions", "readwrite", (st) => st.put({ ...s, endedAt: Date.now() }));
+}
