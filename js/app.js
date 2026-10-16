@@ -4,13 +4,14 @@ import { nextCycleIndex, workoutMinutes, newPRs, totalVolume } from "./logic.js"
 import * as db from "./db.js";
 import { openPad } from "./numpad.js";
 import { hold, openSheet } from "./ui.js";
+import { artHTML } from "./illustrations.js";
 import { renderProgress } from "./progress.js";
 import { syncNow } from "./sync.js";
 import { renderSettings } from "./settings.js";
 
 const app = document.getElementById("app");
 // S = everything the screen needs. prev = last time's values (used to pre-fill).
-const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false, tab: "log", routines: {}, toast: "", summary: "" };
+const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false, tab: "log", routines: {}, toast: "", summary: "", media: {} };
 const routine = () => S.routines[S.type] ?? [];
 const key = (e, n) => `${e}|${n}`;
 const logged = (e, n) => S.sets.find((s) => s.exercise === e && s.setNumber === n);
@@ -28,14 +29,14 @@ function firstOpen() {
 }
 
 async function init() {
-  Object.assign(S, { session: null, sets: [], prev: {}, drafts: {}, toast: "", routines: await db.getRoutine() });
+  Object.assign(S, { session: null, sets: [], prev: {}, drafts: {}, toast: "", routines: await db.getRoutine(), media: await db.getMedia() });
   const sid = Number(localStorage.getItem("activeSession"));
   const active = sid ? await db.getSession(sid) : null;
   if (active) {
     Object.assign(S, { session: active, type: active.type, cycleIndex: active.cycleIndex });
     S.sets = await db.getSetsBySession(sid);
   } else {
-    S.cycleIndex = nextCycleIndex(await db.getLastSession());
+    S.cycleIndex = nextCycleIndex(await db.getLastCycleSession());
     S.type = CYCLE[S.cycleIndex];
   }
   for (const s of await db.getSetsSince(0)) if (s.sessionId !== S.session?.id) S.prev[key(s.exercise, s.setNumber)] = s;
@@ -53,12 +54,12 @@ function row(i, n) {
     <button class="log" data-a="log" data-i="${i}" data-n="${n}">${l ? "✓" : "Log"}</button></div>`;
 }
 
-// Focus view shows ONLY the current set; "All exercises" shows every set of every exercise.
+// Focus view: a picture banner with the name on it, then ONLY the current set. "All exercises": compact rows with thumbnails.
 function card(i) {
-  const x = routine()[i];
-  const n = nextOpen(i) || x.sets;
-  const rows = S.all ? Array.from({ length: x.sets }, (_, k) => row(i, k + 1)).join("") : `<p class="mute">Set ${n} of ${x.sets}</p>${row(i, n)}`;
-  return `<section class="card ${i === S.focus ? "cur" : ""}"><h2 data-a="focus" data-i="${i}">${x.name}</h2>${rows}</section>`;
+  const x = routine()[i], n = nextOpen(i) || x.sets, img = artHTML(x.name, S.media);
+  if (S.all) return `<section class="card ${i === S.focus ? "cur" : ""}"><div class="allhead" data-a="focus" data-i="${i}"><div class="thumb">${img}</div><h2>${x.name}</h2></div>
+    ${Array.from({ length: x.sets }, (_, k) => row(i, k + 1)).join("")}</section>`;
+  return `<section class="card cur"><div class="art">${img}<div class="cap"><h2>${x.name}</h2><em>Set ${n} of ${x.sets}</em></div></div>${row(i, n)}</section>`;
 }
 
 function render() {
@@ -111,13 +112,15 @@ function renderStart() {
   const r = routine(), total = r.reduce((t, x) => t + x.sets, 0);
   app.innerHTML = `<header><div><h1>Ready to train?</h1><p>Next up in your cycle</p></div></header>
     ${S.summary ? `<div class="toast">${S.summary}</div>` : ""}
+    <div class="pills">${["push", "pull", "legs"].map((d) => `<button class="pill ${d === S.type ? "on" : ""}" data-a="day" data-d="${d}">${cap(d)}</button>`).join("")}</div>
+    <p class="mute" style="margin:0 0 10px">${S.type === CYCLE[S.cycleIndex] ? "Suggested by your cycle." : `Your cycle suggests ${cap(CYCLE[S.cycleIndex])}. Training ${cap(S.type)} instead won't move your cycle.`}</p>
     <section class="card"><h2 style="cursor:default">${cap(S.type)} day</h2><p class="mute">${r.length} exercises, ${total} sets</p>
       <ol class="plan">${r.map((x) => `<li>${x.name}<span>${x.sets} sets</span></li>`).join("")}</ol>
       ${r.length ? `<button class="startbtn" data-a="start">Start workout</button>` : `<p class="mute">Add exercises to this day in Settings first.</p>`}</section>`;
 }
 
 async function startWorkout() {
-  const id = await db.addSession(S.type, S.cycleIndex);
+  const id = await db.addSession(S.type, S.cycleIndex, S.type !== CYCLE[S.cycleIndex]);
   localStorage.setItem("activeSession", id);
   Object.assign(S, { session: { id, type: S.type, cycleIndex: S.cycleIndex }, summary: "", all: false, focus: 0 });
   render();
@@ -153,13 +156,14 @@ async function endWorkout() {
 app.addEventListener("click", (e) => {
   const b = e.target.closest("[data-a]");
   if (!b) return;
-  const { a, i, n, f } = b.dataset;
+  const { a, i, n, f, d } = b.dataset;
   if (a === "all") { S.all = !S.all; render(); }
   else if (a === "focus") { S.focus = +i; S.all = false; render(); }
   else if (a === "edit") edit(+i, +n, f);
   else if (a === "log") log(+i, +n, b);
   else if (a === "menu") endFlow();
   else if (a === "start") startWorkout();
+  else if (a === "day") { S.type = d; render(); }
 });
 document.getElementById("nav").addEventListener("click", (e) => {
   const t = e.target.closest("[data-tab]");

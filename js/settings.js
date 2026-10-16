@@ -2,15 +2,27 @@
 import * as db from "./db.js";
 import { syncNow } from "./sync.js";
 import { hold } from "./ui.js";
+import { artHTML, POSES, poseOf } from "./illustrations.js";
 
 const DAYS = ["push", "pull", "legs"];
 const cap = (t) => t[0].toUpperCase() + t.slice(1);
 const date = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+let photoFor = ""; // exercise the next chosen photo belongs to
+
+// Crop to the centre in 16:9 and shrink, so each photo is only ~40 KB on the phone.
+async function toJpeg(file) {
+  const bmp = await createImageBitmap(file), W = 640, H = 360;
+  const c = Object.assign(document.createElement("canvas"), { width: W, height: H });
+  const k = Math.max(W / bmp.width, H / bmp.height), w = bmp.width * k, h = bmp.height * k;
+  c.getContext("2d").drawImage(bmp, (W - w) / 2, (H - h) / 2, w, h);
+  return c.toDataURL("image/jpeg", 0.8);
+}
+
 let msgs = {}; // status lines shown right next to the control that caused them
 const st = (k) => (msgs[k] ? `<p class="status ${msgs[k].ok ? "ok" : "err"}">${msgs[k].text}</p>` : "");
 
 export async function renderSettings(el) {
-  const [routine, library, sessions, sets] = await Promise.all([db.getRoutine(), db.getLibrary(), db.getAllSessions(), db.getSetsSince(0)]);
+  const [routine, library, sessions, sets, media] = await Promise.all([db.getRoutine(), db.getLibrary(), db.getAllSessions(), db.getSetsSince(0), db.getMedia()]);
   const used = new Set(DAYS.flatMap((d) => routine[d].map((x) => x.name)));
   const reserve = library.filter((n) => !used.has(n));
   const count = {};
@@ -30,6 +42,11 @@ export async function renderSettings(el) {
     <h3>Routine (✕ moves an exercise to reserve)</h3>${DAYS.map(dayCard).join("")}
     <h3>Exercise library</h3><div class="card"><div class="add" style="margin-top:0"><input id="newex" placeholder="New exercise name"><button class="mini" data-a="new">Add</button></div>${st("lib")}
       <p class="mute">In reserve (${reserve.length})</p><div class="tags">${reserve.map((n) => `<span>${n}</span>`).join("") || `<span class="mute">None</span>`}</div></div>
+    <h3>Exercise images</h3><div class="card">${st("img")}<p class="mute" style="margin:0 0 4px">Pick a drawing for each exercise, or upload your own photo. Photos stay on this phone.</p>
+      ${library.map((n) => `<div class="lib"><div class="thumb">${artHTML(n, media)}</div><div class="libmid"><b>${n}</b>
+        ${media[n]?.photo ? `<span class="mute">Your photo</span>` : `<select data-pose="${n}">${Object.entries(POSES).map(([k, p]) => `<option value="${k}" ${poseOf(n, media) === k ? "selected" : ""}>${p.l}</option>`).join("")}</select>`}</div>
+        <span class="step"><button data-a="photo" data-n="${n}">Photo</button>${media[n]?.photo ? `<button data-a="unphoto" data-n="${n}">✕</button>` : ""}</span></div>`).join("")}
+      <input type="file" id="file" accept="image/*" hidden></div>
     <h3>Google Sheets sync</h3><div class="card">
       <label class="mute">Web app URL</label><input id="u" value="${url}" placeholder="https://script.google.com/macros/s/.../exec">
       <label class="mute">Secret</label><input id="k" type="password" value="${secret}">
@@ -66,6 +83,11 @@ export async function renderSettings(el) {
       el.querySelector("#pend").textContent = `${(await db.getUnsyncedSets()).length} sets waiting to upload`;
       return;
     }
+    else if (a === "photo") { photoFor = b.dataset.n; el.querySelector("#file").click(); return; }
+    else if (a === "unphoto") {
+      const m = await db.getMedia(); delete m[b.dataset.n].photo; await db.saveMedia(m);
+      msgs.img = { text: "Photo removed, drawing restored", ok: true }; return renderSettings(el);
+    }
     else if (a === "export") {
       const data = { sessions, sets, routine, library };
       const link = Object.assign(document.createElement("a"), { download: `gym-backup-${new Date().toISOString().slice(0, 10)}.json`,
@@ -74,6 +96,21 @@ export async function renderSettings(el) {
     } else return;
     await db.saveRoutine(routine); // saving flags the routine for the next sync
     syncNow();
+    renderSettings(el);
+  };
+  el.onchange = async (e) => { // drawing chosen from a dropdown
+    if (!e.target.dataset.pose) return;
+    const m = await db.getMedia(), n = e.target.dataset.pose;
+    m[n] = { ...m[n], pose: e.target.value }; await db.saveMedia(m);
+    msgs.img = { text: "Drawing updated", ok: true }; renderSettings(el);
+  };
+  el.querySelector("#file").onchange = async (e) => { // photo chosen from the phone
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const m = await db.getMedia(); m[photoFor] = { ...m[photoFor], photo: await toJpeg(f) }; await db.saveMedia(m);
+      msgs.img = { text: `Photo saved for ${photoFor}`, ok: true };
+    } catch { msgs.img = { text: "Could not read that image", ok: false }; }
     renderSettings(el);
   };
   el.querySelectorAll(".hold").forEach((b) => hold(b, 1500, async () => {
