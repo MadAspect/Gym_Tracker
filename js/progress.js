@@ -31,8 +31,12 @@ export async function renderProgress(el) {
   const pb = personalBests(sets);
   const date = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
+  const vol = Math.round(month.reduce((t, s) => t + totalVolume(by[s.id]), 0));
+  const avg = month.length ? Math.round(month.reduce((t, s) => t + workoutMinutes(by[s.id]), 0) / month.length) : 0;
+  const tile = (n, l) => `<div class="tile"><b>${n}</b><span>${l}</span></div>`;
+  const tiles = `<div class="stats">${tile(month.length, "workouts")}${tile(vol >= 1000 ? (vol / 1000).toFixed(1) + "k" : vol, "kg lifted")}${tile(avg, "avg min")}</div>`;
   el.innerHTML = `<header><h1>Progress</h1></header>
-    <h3>Last 30 days</h3><div class="card list">${month.map((s) => `<div><span>${date(s.startedAt)}, ${s.type}</span>
+    <h3>Last 30 days</h3>${tiles}<div class="card list">${month.map((s) => `<div><span>${date(s.startedAt)}, ${s.type}</span>
       <span>${workoutMinutes(by[s.id])} min</span><span>${Math.round(totalVolume(by[s.id]))} kg</span></div>`).join("") || `<span class="mute">No workouts yet.</span>`}</div>
     <h3>Estimated 1RM (kg)</h3><div class="card"><select>${names.map((n) => `<option ${n === ex ? "selected" : ""}>${n}</option>`).join("")}</select>${chart(exPts)}</div>
     <h3>Rep records: ${ex}</h3><div class="card list">${repPRs(sets, ex).slice(0, 6).map((r) => `<div><span>${r.weightKg} kg</span><span>${r.reps} reps</span><span>${date(r.at)}</span></div>`).join("") || `<span class="mute">No sets yet.</span>`}</div>

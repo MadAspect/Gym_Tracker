@@ -32,9 +32,8 @@ async function run(store, mode, fn) {
   });
 }
 
-// offCycle = you trained a different day than the cycle suggested; such sessions don't move the cycle.
-export const addSession = (type, cycleIndex, offCycle = false) =>
-  run("sessions", "readwrite", (s) => s.add({ type, cycleIndex, offCycle, startedAt: Date.now() }));
+export const addSession = (type, cycleIndex) =>
+  run("sessions", "readwrite", (s) => s.add({ type, cycleIndex, startedAt: Date.now() }));
 
 export const getLastSession = async () => {
   const all = await run("sessions", "readonly", (s) => s.getAll());
@@ -111,10 +110,6 @@ export async function endSession(id) {
   const s = await getSession(id);
   if (s) await run("sessions", "readwrite", (st) => st.put({ ...s, endedAt: Date.now() }));
 }
-
-// The cycle only advances on sessions that matched the suggested day.
-export const getLastCycleSession = async () =>
-  (await getAllSessions()).filter((x) => !x.offCycle).at(-1) ?? null;
 
 // Per-exercise pictures: { name: { pose?, photo? } }
 export const getMedia = () => getKV("media", {});

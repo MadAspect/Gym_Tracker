@@ -58,3 +58,13 @@ export function newPRs(history, set) {
   if (estimated1RM(set) > Math.max(...prior.map(estimated1RM))) out.push("estimated 1RM");
   return out;
 }
+
+// Where a trained day sits in the cycle: the first slot from the suggested one onward that matches it.
+// Doing Legs on a Push day counts as the Legs slot, so the cycle carries on from there.
+export function cycleIndexFor(type, pointer) {
+  for (let k = 0; k < CYCLE.length; k++) {
+    const i = (pointer + k) % CYCLE.length;
+    if (CYCLE[i] === type) return i;
+  }
+  return pointer;
+}

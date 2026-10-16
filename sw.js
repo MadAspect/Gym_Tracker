@@ -1,6 +1,6 @@
 // PWA layer: caches the app files so it opens offline. Stale-while-revalidate:
 // serve the cached copy instantly, refresh it in the background for next time.
-const CACHE = "gym-v4";
+const CACHE = "gym-v5";
 const FILES = ["./", "index.html", "css/style.css", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png",
   "js/app.js", "js/db.js", "js/logic.js", "js/numpad.js", "js/progress.js", "js/routine.js", "js/sync.js", "js/settings.js", "js/ui.js", "js/illustrations.js"];
 

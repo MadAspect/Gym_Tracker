@@ -19,3 +19,9 @@ Weights are stored in kg; lb is converted on input.
 1. Push to GitHub. Repo Settings > Pages > Deploy from branch > `main` / root.
 2. Open `https://<username>.github.io/gym-tracker/` in Chrome on Android, menu > Install app.
 3. Re-enter the Sync URL and secret on the Sync tab (settings are stored per site).
+
+## Change the name or icon
+- **Name:** edit `name` and `short_name` in `manifest.webmanifest`, and `<title>` in `index.html`.
+- **Icon:** `python tools/make_icons.py` redraws the default icon (colours at the top of the script), or
+  `python tools/make_icons.py my-logo.png` uses your own image. Then push. Android refreshes the installed
+  app's name and icon on its own within about a day; use Export backup in Settings before reinstalling.

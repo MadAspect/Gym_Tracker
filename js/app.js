@@ -1,9 +1,9 @@
 // UI controller: holds screen state, renders HTML, reacts to taps.
 import { CYCLE } from "./routine.js";
-import { nextCycleIndex, workoutMinutes, newPRs, totalVolume } from "./logic.js";
+import { nextCycleIndex, workoutMinutes, newPRs, totalVolume, cycleIndexFor } from "./logic.js";
 import * as db from "./db.js";
 import { openPad } from "./numpad.js";
-import { hold, openSheet } from "./ui.js";
+import { hold, openSheet, icon } from "./ui.js";
 import { artHTML } from "./illustrations.js";
 import { renderProgress } from "./progress.js";
 import { syncNow } from "./sync.js";
@@ -36,7 +36,7 @@ async function init() {
     Object.assign(S, { session: active, type: active.type, cycleIndex: active.cycleIndex });
     S.sets = await db.getSetsBySession(sid);
   } else {
-    S.cycleIndex = nextCycleIndex(await db.getLastCycleSession());
+    S.cycleIndex = nextCycleIndex(await db.getLastSession());
     S.type = CYCLE[S.cycleIndex];
   }
   for (const s of await db.getSetsSince(0)) if (s.sessionId !== S.session?.id) S.prev[key(s.exercise, s.setNumber)] = s;
@@ -70,7 +70,7 @@ function render() {
   const list = S.all ? r.map((_, i) => i) : r[S.focus] ? [S.focus] : [];
   app.innerHTML = `<header><div><h1>${cap(S.type)}</h1>
     <p>${S.sets.length} of ${total} sets${S.sets.length > 1 ? `, ${workoutMinutes(S.sets)} min` : ""}</p></div>
-    <span class="hbtns"><button data-a="all">${S.all ? "Focus view" : "All exercises"}</button><button data-a="menu" aria-label="Workout menu">⋯</button></span></header>
+    <span class="hbtns"><button class="round ${S.all ? "on" : ""}" data-a="all" aria-label="All exercises">${icon("list")}</button><button class="round" data-a="menu" aria-label="Workout menu">${icon("dots")}</button></span></header>
     <div class="bar"><i style="width:${(S.sets.length / (total || 1)) * 100}%"></i></div>
     ${S.toast ? `<div class="toast">${S.toast}</div>` : ""}
     ${list.map(card).join("") || `<div class="glass empty">All sets logged.</div>`}`;
@@ -110,19 +110,20 @@ async function log(i, n, btn) {
 
 function renderStart() {
   const r = routine(), total = r.reduce((t, x) => t + x.sets, 0);
-  app.innerHTML = `<header><div><h1>Ready to train?</h1><p>Next up in your cycle</p></div></header>
+  app.innerHTML = `<header><div><p class="brand">FORGE</p><h1>Ready to train?</h1><p>Next up in your cycle</p></div></header>
     ${S.summary ? `<div class="toast">${S.summary}</div>` : ""}
     <div class="pills">${["push", "pull", "legs"].map((d) => `<button class="pill ${d === S.type ? "on" : ""}" data-a="day" data-d="${d}">${cap(d)}</button>`).join("")}</div>
-    <p class="mute" style="margin:0 0 10px">${S.type === CYCLE[S.cycleIndex] ? "Suggested by your cycle." : `Your cycle suggests ${cap(CYCLE[S.cycleIndex])}. Training ${cap(S.type)} instead won't move your cycle.`}</p>
+    <p class="mute" style="margin:0 0 10px">${S.type === CYCLE[S.cycleIndex] ? "Suggested by your cycle." : `Your cycle suggests ${cap(CYCLE[S.cycleIndex])}. If you train ${cap(S.type)}, the cycle carries on from there.`}</p>
     <section class="card"><h2 style="cursor:default">${cap(S.type)} day</h2><p class="mute">${r.length} exercises, ${total} sets</p>
       <ol class="plan">${r.map((x) => `<li>${x.name}<span>${x.sets} sets</span></li>`).join("")}</ol>
       ${r.length ? `<button class="startbtn" data-a="start">Start workout</button>` : `<p class="mute">Add exercises to this day in Settings first.</p>`}</section>`;
 }
 
 async function startWorkout() {
-  const id = await db.addSession(S.type, S.cycleIndex, S.type !== CYCLE[S.cycleIndex]);
+  const ci = cycleIndexFor(S.type, S.cycleIndex); // the cycle follows what you actually trained
+  const id = await db.addSession(S.type, ci);
   localStorage.setItem("activeSession", id);
-  Object.assign(S, { session: { id, type: S.type, cycleIndex: S.cycleIndex }, summary: "", all: false, focus: 0 });
+  Object.assign(S, { session: { id, type: S.type, cycleIndex: ci }, summary: "", all: false, focus: 0 });
   render();
 }
 
