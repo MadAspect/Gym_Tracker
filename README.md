@@ -25,3 +25,8 @@ Weights are stored in kg; lb is converted on input.
 - **Icon:** `python tools/make_icons.py` redraws the default icon (colours at the top of the script), or
   `python tools/make_icons.py my-logo.png` uses your own image. Then push. Android refreshes the installed
   app's name and icon on its own within about a day; use Export backup in Settings before reinstalling.
+
+## Use it yourself (or share it)
+- **Install:** open the live site, then on Android Chrome use menu > Install app. On iPhone use Safari > Share > Add to Home Screen.
+- **Your data stays on your device.** Nothing is uploaded unless you set up Sync with your own Google Sheet (steps above). Never share your Sync URL or secret.
+- **Make it yours:** edit each day's exercises in Settings. The Push / Pull / Legs cycle is set in `js/routine.js`.

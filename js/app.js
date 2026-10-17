@@ -1,17 +1,29 @@
 // UI controller: holds screen state, renders HTML, reacts to taps.
 import { CYCLE } from "./routine.js";
-import { nextCycleIndex, workoutMinutes, newPRs, totalVolume, cycleIndexFor } from "./logic.js";
+import { nextCycleIndex, workoutMinutes, newPRs, totalVolume, cycleIndexFor, streak, dayNum } from "./logic.js";
 import * as db from "./db.js";
 import { openPad } from "./numpad.js";
-import { hold, openSheet, icon } from "./ui.js";
+import { hold, openSheet, icon, enter, hearth } from "./ui.js";
 import { artHTML } from "./illustrations.js";
 import { renderProgress } from "./progress.js";
+let greeting = () => "Ready when you are."; // replaced once theme.js has loaded
+
+// If a secondary screen fails to load, show why instead of leaving a blank page.
+function fail(e) {
+  app.textContent = "";
+  const c = document.createElement("div");
+  c.className = "card";
+  c.innerHTML = '<h2>Something went wrong</h2><p class="mute"></p><button class="finish" id="reload">Reload</button>';
+  c.querySelector("p").textContent = String(e?.message || e);
+  c.querySelector("#reload").onclick = () => location.reload();
+  app.append(c);
+}
 import { syncNow } from "./sync.js";
-import { renderSettings } from "./settings.js";
 
 const app = document.getElementById("app");
 // S = everything the screen needs. prev = last time's values (used to pre-fill).
-const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false, tab: "log", routines: {}, toast: "", summary: "", media: {} };
+const S = { session: null, type: "", cycleIndex: 0, sets: [], prev: {}, drafts: {}, focus: 0, all: false, tab: "log", routines: {}, toast: "", summary: "", media: {}, streak: 0 }
+const TABS = ["log", "calendar", "progress", "settings"];
 const routine = () => S.routines[S.type] ?? [];
 const key = (e, n) => `${e}|${n}`;
 const logged = (e, n) => S.sets.find((s) => s.exercise === e && s.setNumber === n);
@@ -39,7 +51,9 @@ async function init() {
     S.cycleIndex = nextCycleIndex(await db.getLastSession());
     S.type = CYCLE[S.cycleIndex];
   }
-  for (const s of await db.getSetsSince(0)) if (s.sessionId !== S.session?.id) S.prev[key(s.exercise, s.setNumber)] = s;
+  const hist = await db.getSetsSince(0), trained = new Set(hist.map((x) => x.sessionId));
+  for (const s of hist) if (s.sessionId !== S.session?.id) S.prev[key(s.exercise, s.setNumber)] = s;
+  S.streak = streak([...new Set((await db.getAllSessions()).filter((x) => trained.has(x.id)).map((x) => dayNum(x.startedAt)))].sort((a, b) => a - b));
   S.focus = firstOpen();
   render();
 }
@@ -64,7 +78,8 @@ function card(i) {
 
 function render() {
   if (S.tab === "progress") return renderProgress(app);
-  if (S.tab === "settings") return renderSettings(app);
+  if (S.tab === "calendar") return import("./calendar.js").then((m) => m.renderCalendar(app)).catch(fail);
+  if (S.tab === "settings") return import("./settings.js").then((m) => m.renderSettings(app)).catch(fail);
   if (!S.session) return renderStart();
   const r = routine(), total = r.reduce((t, x) => t + x.sets, 0);
   const list = S.all ? r.map((_, i) => i) : r[S.focus] ? [S.focus] : [];
@@ -104,13 +119,41 @@ async function log(i, n, btn) {
   syncNow();
   delete S.drafts[key(x.name, n)];
   if (!S.all && !nextOpen(i)) S.focus = firstOpen(); // exercise finished: load the next one
+  if (firstOpen() < routine().length) startRest(); else stopRest(); // the log burns down between sets
   if (btn) { btn.textContent = "✓"; btn.classList.add("ok"); navigator.vibrate?.(30); await new Promise((r) => setTimeout(r, 170)); } // visible "registered" flash
   render();
 }
 
+// Rest timer: a log that burns down between sets. Lives outside #app so re-renders don't disturb it.
+const restEl = document.getElementById("rest");
+let rest = null, restTick = 0;
+function startRest() {
+  const secs = Number(localStorage.getItem("restSecs")) || 90;
+  rest = { end: Date.now() + secs * 1000, total: secs * 1000, done: false };
+  restEl.innerHTML = `<div class="logbar"><i></i></div><span class="rtxt"></span><button data-r="add">+30s</button><button data-r="x" aria-label="Dismiss">✕</button>`;
+  restEl.className = "show";
+  clearInterval(restTick); restTick = setInterval(drawRest, 250); drawRest();
+}
+function stopRest() { rest = null; clearInterval(restTick); restEl.className = ""; }
+function drawRest() {
+  if (!rest) return;
+  const left = rest.end - Date.now();
+  if (left <= 0 && !rest.done) { rest.done = true; rest.hideAt = Date.now() + 4000; navigator.vibrate?.([200, 100, 200]); }
+  if (rest.done && Date.now() > rest.hideAt) return stopRest();
+  const s = Math.max(0, Math.ceil(left / 1000));
+  restEl.querySelector("i").style.width = Math.max(0, left / rest.total) * 100 + "%";
+  restEl.querySelector(".rtxt").textContent = rest.done ? "Back to the iron" : `Rest ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+restEl.addEventListener("click", (e) => {
+  const r = e.target.closest("[data-r]")?.dataset.r;
+  if (r === "add" && rest) { rest.end += 30000; rest.total += 30000; rest.done = false; }
+  else if (r === "x") stopRest();
+});
+
 function renderStart() {
   const r = routine(), total = r.reduce((t, x) => t + x.sets, 0);
-  app.innerHTML = `<header><div><p class="brand">FORGE</p><h1>Ready to train?</h1><p>Next up in your cycle</p></div></header>
+  app.innerHTML = `<header><div><p class="brand">FORGE</p><h1>Ready to train?</h1><p>${greeting()}</p></div></header>
+    ${hearth(S.streak)}
     ${S.summary ? `<div class="toast">${S.summary}</div>` : ""}
     <div class="pills">${["push", "pull", "legs"].map((d) => `<button class="pill ${d === S.type ? "on" : ""}" data-a="day" data-d="${d}">${cap(d)}</button>`).join("")}</div>
     <p class="mute" style="margin:0 0 10px">${S.type === CYCLE[S.cycleIndex] ? "Suggested by your cycle." : `Your cycle suggests ${cap(CYCLE[S.cycleIndex])}. If you train ${cap(S.type)}, the cycle carries on from there.`}</p>
@@ -124,7 +167,7 @@ async function startWorkout() {
   const id = await db.addSession(S.type, ci);
   localStorage.setItem("activeSession", id);
   Object.assign(S, { session: { id, type: S.type, cycleIndex: ci }, summary: "", all: false, focus: 0 });
-  render();
+  render(); enter(1);
 }
 
 // Ending needs two deliberate steps: open the menu and tap End, then HOLD the confirm button.
@@ -133,7 +176,7 @@ function endFlow() {
     <button class="menu-btn" id="end">End workout</button><button class="finish" id="close">Close</button>`, (sh, close) => {
     sh.querySelector("#close").onclick = close;
     sh.querySelector("#end").onclick = () => {
-      sh.innerHTML = `<p class="confirm">End ${cap(S.type)}?<br><span class="mute">${S.sets.length} sets logged. Hold the button to confirm.</span></p>
+      sh.innerHTML = `<p class="confirm">End ${cap(S.type)}?<br><span class="mute">${S.sets.length} ${S.sets.length === 1 ? "set" : "sets"} logged. Hold the button to confirm.</span></p>
         <button class="hold big" id="hold">Hold to end workout</button><button class="finish" id="cancel">Keep training</button>`;
       sh.querySelector("#cancel").onclick = close;
       hold(sh.querySelector("#hold"), 1500, async () => { close(); await endWorkout(); });
@@ -142,6 +185,7 @@ function endFlow() {
 }
 
 async function endWorkout() {
+  stopRest();
   const { id } = S.session, sets = S.sets, type = S.type;
   localStorage.removeItem("activeSession");
   let summary = "Empty workout discarded";
@@ -151,7 +195,7 @@ async function endWorkout() {
   } else await db.deleteSession(id); // an empty workout must not advance your cycle
   await init();
   S.summary = summary;
-  render();
+  render(); enter(-1);
 }
 
 app.addEventListener("click", (e) => {
@@ -169,12 +213,17 @@ app.addEventListener("click", (e) => {
 document.getElementById("nav").addEventListener("click", (e) => {
   const t = e.target.closest("[data-tab]");
   if (!t) return;
+  const prev = S.tab;
   S.tab = t.dataset.tab;
+  app.onclick = null; app.onchange = null; // drop the previous tab's handlers
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("on", b === t));
-  if (S.tab === "log") init(); else render(); // re-read routine and sessions after settings changes
+  const dir = Math.sign(TABS.indexOf(S.tab) - TABS.indexOf(prev));
+  Promise.resolve(S.tab === "log" ? init() : render()).then(() => enter(dir)); // Log re-reads routine and sessions
 });
 window.addEventListener("online", () => syncNow());
-init().then(syncNow);
+try { const m = await import("./theme.js"); greeting = m.greeting; m.initTheme(); } // the look is optional: Log works without it
+catch (e) { console.warn("theme failed to load", e); }
+init().then(syncNow).catch(fail);
 
 // PWA: work offline, and ask the browser not to evict our saved workouts.
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");

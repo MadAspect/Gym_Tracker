@@ -68,3 +68,16 @@ export function cycleIndexFor(type, pointer) {
   }
   return pointer;
 }
+
+// Calendar helpers: a day number (whole local days) and your workout streak.
+export const dayNum = (t) => { const d = new Date(t); return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5); };
+
+// Streak = workouts in a row with at most 2 rest days between them (your PPL-PP cycle),
+// and it only counts while your latest workout is no more than 3 days ago.
+export function streak(days) {
+  if (!days.length || dayNum(Date.now()) - days.at(-1) > 3) return 0;
+  let n = 1;
+  for (let i = days.length - 1; i > 0 && days[i] - days[i - 1] <= 3; i--) n++;
+  return n;
+}
+

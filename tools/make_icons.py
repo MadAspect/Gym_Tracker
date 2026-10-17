@@ -8,10 +8,10 @@ Change the colours below to restyle the default icon."""
 import sys
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-BG = (0, 0, 0)            # background colour
-GLOW = (118, 82, 255)     # soft glow in the top-left corner
+BG = (11, 15, 14)            # background colour
+GLOW = (238, 138, 59)     # ember glow in the top-left corner
 PLATE = (255, 255, 255)   # big plates
-ACCENT = (181, 156, 255)  # small outer plates
+ACCENT = (238, 138, 59)   # small outer plates
 S = 1024                  # drawn large, then shrunk for crisp edges
 
 def default_icon():

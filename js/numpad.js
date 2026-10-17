@@ -1,5 +1,6 @@
 // UI: custom number pad (bottom sheet). Weight can be typed in lb; it returns kg.
 import { lbToKg } from "./logic.js";
+import { springIn, tapped } from "./ui.js";
 const pad = document.getElementById("pad");
 
 export function openPad({ title, value, isWeight, onDone }) {
@@ -36,4 +37,5 @@ export function openPad({ title, value, isWeight, onDone }) {
     draw();
   };
   pad.className = "open"; draw();
+  springIn(pad.firstElementChild, tapped()); // grows out of the chip you tapped
 }

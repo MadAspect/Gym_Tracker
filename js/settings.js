@@ -27,6 +27,7 @@ export async function renderSettings(el) {
   const reserve = library.filter((n) => !used.has(n));
   const count = {};
   sets.forEach((s) => (count[s.sessionId] = (count[s.sessionId] || 0) + 1));
+  const restSecs = Number(localStorage.getItem("restSecs")) || 90;
   const url = localStorage.getItem("syncUrl") || "", secret = localStorage.getItem("syncSecret") || "";
   const pending = (await db.getUnsyncedSets()).length;
   const btn = (a, d, i, v, t) => `<button data-a="${a}" data-d="${d}" data-i="${i}" data-v="${v}">${t}</button>`;
@@ -47,6 +48,9 @@ export async function renderSettings(el) {
         ${media[n]?.photo ? `<span class="mute">Your photo</span>` : `<select data-pose="${n}">${Object.entries(POSES).map(([k, p]) => `<option value="${k}" ${poseOf(n, media) === k ? "selected" : ""}>${p.l}</option>`).join("")}</select>`}</div>
         <span class="step"><button data-a="photo" data-n="${n}">Photo</button>${media[n]?.photo ? `<button data-a="unphoto" data-n="${n}">✕</button>` : ""}</span></div>`).join("")}
       <input type="file" id="file" accept="image/*" hidden></div>
+    <h3>Rest timer and look</h3><div class="card"><p class="mute" style="margin:0 0 10px">Rest between sets</p>
+      <div class="pills" style="margin:0 0 10px">${[60, 90, 120, 180].map((n) => `<button class="pill ${restSecs === n ? "on" : ""}" data-a="rest" data-v="${n}">${n >= 120 ? n / 60 + " min" : n + "s"}</button>`).join("")}</div>
+      <button class="finish" style="margin:0" data-a="day">Watch a day pass</button></div>
     <h3>Google Sheets sync</h3><div class="card">
       <label class="mute">Web app URL</label><input id="u" value="${url}" placeholder="https://script.google.com/macros/s/.../exec">
       <label class="mute">Secret</label><input id="k" type="password" value="${secret}">
@@ -83,6 +87,8 @@ export async function renderSettings(el) {
       el.querySelector("#pend").textContent = `${(await db.getUnsyncedSets()).length} sets waiting to upload`;
       return;
     }
+    else if (a === "rest") { localStorage.setItem("restSecs", v); return renderSettings(el); }
+    else if (a === "day") { (await import("./theme.js")).previewDay(); return; }
     else if (a === "photo") { photoFor = b.dataset.n; el.querySelector("#file").click(); return; }
     else if (a === "unphoto") {
       const m = await db.getMedia(); delete m[b.dataset.n].photo; await db.saveMedia(m);
